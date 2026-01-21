@@ -34,11 +34,19 @@ function broadcast(msg) {
 
 // Start Python API server
 let pythonProcess;
+let pythonReady = false;
+
 function startPythonAPI() {
   const pythonPath = process.platform === 'win32' ? 'venv\\Scripts\\python' : './venv/bin/python';
   pythonProcess = spawn(pythonPath, ['api_server.py']);
   
-  pythonProcess.stdout.on('data', (data) => console.log(`[Python API] ${data}`));
+  pythonProcess.stdout.on('data', (data) => {
+    console.log(`[Python API] ${data}`);
+    if (data.toString().includes('Uvicorn running')) {
+      pythonReady = true;
+      broadcast({ type: 'python_status', ready: true });
+    }
+  });
   pythonProcess.stderr.on('data', (data) => console.error(`[Python API] ${data}`));
   
   console.log(`🐍 Python API starting on port ${PYTHON_API_PORT}...`);
@@ -64,6 +72,9 @@ setInterval(async () => {
 
 // Proxy to Python extraction API
 app.post('/api/extract', async (req, res) => {
+  if (!pythonReady) {
+    return res.status(503).json({ error: 'Python API still starting' });
+  }
   try {
     const response = await axios.post(`http://localhost:${PYTHON_API_PORT}/extract`, req.body);
     res.json(response.data);
