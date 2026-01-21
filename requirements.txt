@@ -3,3 +3,4 @@ uvicorn[standard]==0.27.0
 numpy==1.26.3
 umap-learn==0.5.5
 pydantic==2.5.3
+requests==2.31.0

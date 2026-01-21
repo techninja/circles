@@ -43,7 +43,7 @@
 
 <body>
     <div id="ui">
-        <input id="tokens" placeholder="house, skeleton, truth" value="house, skeleton, truth">
+        <input id="tokens" placeholder="animalia" value="animalia">
         <button id="extract">Extract Manifold</button>
         <div id="status"></div>
     </div>
@@ -57,6 +57,7 @@
         extractBtn.onclick = async () => {
             const tokens = tokensInput.value.split(',').map(t => t.trim());
             status.textContent = '⏳ Extracting...';
+            extractBtn.disabled = true;
 
             try {
                 const res = await fetch('/api/extract', {
@@ -66,10 +67,17 @@
                 });
 
                 const data = await res.json();
-                status.textContent = `✅ Extracted ${data.data.length} points`;
-                console.log('Manifold data:', data);
+                if (data.status === 'success') {
+                    status.textContent = `✅ Extracted ${data.data.length} points`;
+                    console.log('Manifold data:', data);
+                } else {
+                    status.textContent = `❌ ${data.detail || 'Unknown error'}`;
+                }
             } catch (err) {
                 status.textContent = `❌ Error: ${err.message}`;
+                console.error(err);
+            } finally {
+                extractBtn.disabled = false;
             }
         };
 
