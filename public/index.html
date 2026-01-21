@@ -1,17 +1,84 @@
 <!DOCTYPE html>
 <html>
+
+<head>
+    <meta charset="utf-8">
+    <title>Circles - Semantic Manifold</title>
+    <style>
+        body {
+            margin: 0;
+            font-family: monospace;
+            background: #0a0a0a;
+            color: #0f0;
+        }
+
+        #ui {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            z-index: 10;
+        }
+
+        input {
+            background: #111;
+            color: #0f0;
+            border: 1px solid #0f0;
+            padding: 8px;
+        }
+
+        button {
+            background: #0f0;
+            color: #000;
+            border: none;
+            padding: 8px 16px;
+            cursor: pointer;
+        }
+
+        #status {
+            margin-top: 10px;
+            font-size: 12px;
+        }
+    </style>
+</head>
+
 <body>
-  <canvas id="manifold-canvas"></canvas>
-  
-  <script type="module">
-    // Direct ESM import from our bundled 'deps' directory
-    import * as THREE from '/deps/three.js';
-    import Matter from '/deps/matter-js.js';
+    <div id="ui">
+        <input id="tokens" placeholder="house, skeleton, truth" value="house, skeleton, truth">
+        <button id="extract">Extract Manifold</button>
+        <div id="status"></div>
+    </div>
+    <div id="canvas-container"></div>
 
-    console.log("Three.js loaded:", THREE.REVISION);
-    console.log("Matter.js loaded:", Matter.version);
+    <script type="module">
+        const status = document.getElementById('status');
+        const extractBtn = document.getElementById('extract');
+        const tokensInput = document.getElementById('tokens');
 
-    // Initialize your "Circles" simulation here...
-  </script>
+        extractBtn.onclick = async () => {
+            const tokens = tokensInput.value.split(',').map(t => t.trim());
+            status.textContent = '⏳ Extracting...';
+
+            try {
+                const res = await fetch('/api/extract', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ tokens, model: 'llama3:8b' })
+                });
+
+                const data = await res.json();
+                status.textContent = `✅ Extracted ${data.data.length} points`;
+                console.log('Manifold data:', data);
+            } catch (err) {
+                status.textContent = `❌ Error: ${err.message}`;
+            }
+        };
+
+        // Health check on load
+        fetch('/api/health')
+            .then(r => r.json())
+            .then(d => status.textContent = `🟢 ${d.status} | Ollama: ${d.ollama}`)
+            .catch(() => status.textContent = '🔴 Backend offline');
+    </script>
 </body>
+
 </html>
