@@ -80,10 +80,8 @@ async def extract_manifold(req: ExtractRequest):
         
         # Project to 3D
         if len(embeddings) == 1:
-            # Single token - place at origin
             result = [{"label": req.tokens[0], "x": 0.0, "y": 0.0, "z": 0.0}]
         else:
-            print(f"Projecting {len(embeddings)} embeddings to 3D")
             n_neighbors = min(5, len(embeddings) - 1)
             reducer = umap.UMAP(n_components=3, n_neighbors=n_neighbors, min_dist=0.1)
             coords = reducer.fit_transform(np.array(embeddings))
