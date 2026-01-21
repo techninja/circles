@@ -3,3 +3,8 @@ node_modules/
 
 # Python Venv
 venv/
+
+# Generated data
+manifold_data.json
+*.pyc
+__pycache__/
