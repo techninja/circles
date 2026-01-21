@@ -6,7 +6,7 @@
     "setup": "node scripts/validate-system.js && npm run bundle-deps",
     "bundle-deps": "node scripts/build-deps.js",
     "start": "node server.js",
-    "python-extract": "./venv/bin/python extraction.py"
+    "dev": "npm run setup && npm start"
   },
   "dependencies": {
     "express": "^4.18.2",
