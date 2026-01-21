@@ -4,6 +4,8 @@ import axios from 'axios';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { spawn } from 'child_process';
+import { WebSocketServer } from 'ws';
+import http from 'http';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -13,6 +15,22 @@ const PYTHON_API_PORT = 8000;
 app.use(cors());
 app.use(express.json());
 app.use(express.static('public'));
+
+const server = http.createServer(app);
+const wss = new WebSocketServer({ server });
+
+let ollamaReady = false;
+const clients = new Set();
+
+wss.on('connection', (ws) => {
+  clients.add(ws);
+  ws.send(JSON.stringify({ type: 'ollama_status', ready: ollamaReady }));
+  ws.on('close', () => clients.delete(ws));
+});
+
+function broadcast(msg) {
+  clients.forEach(ws => ws.send(JSON.stringify(msg)));
+}
 
 // Start Python API server
 let pythonProcess;
@@ -27,6 +45,22 @@ function startPythonAPI() {
 }
 
 startPythonAPI();
+
+// Monitor Ollama status
+setInterval(async () => {
+  try {
+    await axios.get('http://localhost:11434/api/tags', { timeout: 1000 });
+    if (!ollamaReady) {
+      ollamaReady = true;
+      broadcast({ type: 'ollama_status', ready: true });
+    }
+  } catch {
+    if (ollamaReady) {
+      ollamaReady = false;
+      broadcast({ type: 'ollama_status', ready: false });
+    }
+  }
+}, 2000);
 
 // Proxy to Python extraction API
 app.post('/api/extract', async (req, res) => {
@@ -48,7 +82,7 @@ app.get('/api/health', async (req, res) => {
   }
 });
 
-app.listen(PORT, () => {
+server.listen(PORT, () => {
   console.log(`🚀 Circles running at http://localhost:${PORT}`);
 });
 

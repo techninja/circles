@@ -54,6 +54,25 @@
         const extractBtn = document.getElementById('extract');
         const tokensInput = document.getElementById('tokens');
 
+        // WebSocket connection
+        const ws = new WebSocket(`ws://${location.host}`);
+        
+        ws.onmessage = (event) => {
+            const msg = JSON.parse(event.data);
+            if (msg.type === 'ollama_status') {
+                if (msg.ready) {
+                    status.textContent = '🟢 Ollama ready';
+                    extractBtn.disabled = false;
+                } else {
+                    status.textContent = '🟡 Ollama starting...';
+                    extractBtn.disabled = true;
+                }
+            }
+        };
+
+        ws.onopen = () => console.log('WebSocket connected');
+        ws.onerror = () => status.textContent = '🔴 Connection failed';
+
         extractBtn.onclick = async () => {
             const tokens = tokensInput.value.split(',').map(t => t.trim());
             status.textContent = '⏳ Extracting...';
@@ -80,12 +99,6 @@
                 extractBtn.disabled = false;
             }
         };
-
-        // Health check on load
-        fetch('/api/health')
-            .then(r => r.json())
-            .then(d => status.textContent = `🟢 ${d.status} | Ollama: ${d.ollama}`)
-            .catch(() => status.textContent = '🔴 Backend offline');
     </script>
 </body>
 
