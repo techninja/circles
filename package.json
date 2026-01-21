@@ -3,9 +3,8 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "setup": "node scripts/validate-system.mjs && npm run bundle-deps",
-    "bundle-deps": "node scripts/build-deps.mjs",
-    "postinstall": "npm run setup",
+    "setup": "node scripts/validate-system.js && npm run bundle-deps",
+    "bundle-deps": "node scripts/build-deps.js",
     "start": "node server.js",
     "python-extract": "./venv/bin/python extraction.py"
   },
