@@ -1,5 +1,6 @@
 # Node
 node_modules/
+public/deps/
 
 # Python Venv
 venv/
