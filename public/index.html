@@ -10,6 +10,7 @@
             font-family: monospace;
             background: #0a0a0a;
             color: #0f0;
+            overflow: hidden;
         }
 
         #ui {
@@ -24,6 +25,7 @@
             color: #0f0;
             border: 1px solid #0f0;
             padding: 8px;
+            width: 300px;
         }
 
         button {
@@ -38,21 +40,89 @@
             margin-top: 10px;
             font-size: 12px;
         }
+
+        #canvas {
+            display: block;
+        }
     </style>
 </head>
 
 <body>
     <div id="ui">
-        <input id="tokens" placeholder="animalia" value="animalia">
+        <input id="tokens" placeholder="animalia, mammalia, reptilia, aves" value="animalia, mammalia, reptilia, aves">
         <button id="extract">Extract Manifold</button>
         <div id="status"></div>
     </div>
-    <div id="canvas-container"></div>
+    <canvas id="canvas"></canvas>
+
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "/deps/three.js",
+            "matter-js": "/deps/matter-js.js"
+        }
+    }
+    </script>
 
     <script type="module">
+        import * as THREE from 'three';
+
         const status = document.getElementById('status');
         const extractBtn = document.getElementById('extract');
         const tokensInput = document.getElementById('tokens');
+        const canvas = document.getElementById('canvas');
+
+        // Three.js setup
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setClearColor(0x0a0a0a);
+        camera.position.z = 5;
+
+        const manifolds = [];
+
+        function createManifold(data) {
+            const geometry = new THREE.SphereGeometry(0.3, 32, 32);
+            const material = new THREE.MeshBasicMaterial({ 
+                color: 0x00ff88, 
+                wireframe: true 
+            });
+            const sphere = new THREE.Mesh(geometry, material);
+            sphere.position.set(data.x, data.y, data.z);
+            
+            // Label
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            canvas.width = 256;
+            canvas.height = 64;
+            ctx.fillStyle = '#0f0';
+            ctx.font = '24px monospace';
+            ctx.fillText(data.label, 10, 40);
+            
+            const texture = new THREE.CanvasTexture(canvas);
+            const spriteMaterial = new THREE.SpriteMaterial({ map: texture });
+            const sprite = new THREE.Sprite(spriteMaterial);
+            sprite.position.set(data.x, data.y + 0.5, data.z);
+            sprite.scale.set(1, 0.25, 1);
+            
+            scene.add(sphere);
+            scene.add(sprite);
+            manifolds.push({ sphere, sprite, data });
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            manifolds.forEach(m => m.sphere.rotation.y += 0.01);
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
 
         // WebSocket connection
         const ws = new WebSocket(`ws://${location.host}`);
@@ -87,7 +157,17 @@
 
                 const data = await res.json();
                 if (data.status === 'success') {
-                    status.textContent = `✅ Extracted ${data.data.length} points`;
+                    // Clear existing manifolds
+                    manifolds.forEach(m => {
+                        scene.remove(m.sphere);
+                        scene.remove(m.sprite);
+                    });
+                    manifolds.length = 0;
+
+                    // Create new manifolds
+                    data.data.forEach(createManifold);
+                    
+                    status.textContent = `✅ Rendered ${data.data.length} manifolds`;
                     console.log('Manifold data:', data);
                 } else {
                     status.textContent = `❌ ${data.detail || 'Unknown error'}`;
