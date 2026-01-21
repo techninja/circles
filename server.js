@@ -41,15 +41,25 @@ function startPythonAPI() {
   pythonProcess = spawn(pythonPath, ['api_server.py']);
   
   pythonProcess.stdout.on('data', (data) => {
-    console.log(`[Python API] ${data}`);
-    if (data.toString().includes('Uvicorn running')) {
+    const output = data.toString();
+    console.log(`[Python API] ${output}`);
+    if (output.includes('Uvicorn running')) {
       pythonReady = true;
+      console.log('✅ Python API ready');
       broadcast({ type: 'python_status', ready: true });
     }
   });
   pythonProcess.stderr.on('data', (data) => console.error(`[Python API] ${data}`));
   
   console.log(`🐍 Python API starting on port ${PYTHON_API_PORT}...`);
+  
+  // Fallback: assume ready after 3 seconds
+  setTimeout(() => {
+    if (!pythonReady) {
+      pythonReady = true;
+      console.log('⚠️  Python API assumed ready (timeout)');
+    }
+  }, 3000);
 }
 
 startPythonAPI();
