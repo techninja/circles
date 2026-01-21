@@ -84,6 +84,19 @@ app.post('/api/extract', async (req, res) => {
   }
 });
 
+app.post('/api/expand', async (req, res) => {
+  if (!pythonReady) {
+    return res.status(503).json({ error: 'Python API still starting' });
+  }
+  try {
+    const response = await axios.post(`http://localhost:${PYTHON_API_PORT}/expand`, req.body);
+    res.json(response.data);
+  } catch (error) {
+    console.error('Expand API Error:', error.message);
+    res.status(500).json({ error: 'Python API unavailable' });
+  }
+});
+
 app.get('/api/health', async (req, res) => {
   try {
     const response = await axios.get(`http://localhost:${PYTHON_API_PORT}/health`);

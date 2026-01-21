@@ -49,8 +49,8 @@
 
 <body>
     <div id="ui">
-        <input id="tokens" placeholder="animalia, mammalia, reptilia, aves" value="animalia, mammalia, reptilia, aves">
-        <button id="extract">Extract Manifold</button>
+        <input id="tokens" placeholder="animalia" value="animalia">
+        <button id="extract">Discover Manifold</button>
         <div id="status"></div>
     </div>
     <canvas id="canvas"></canvas>
@@ -144,27 +144,25 @@
         ws.onerror = () => status.textContent = '🔴 Connection failed';
 
         extractBtn.onclick = async () => {
-            const tokens = tokensInput.value.split(',').map(t => t.trim());
-            status.textContent = '⏳ Extracting...';
+            const seed = tokensInput.value.trim();
+            status.textContent = '⏳ Discovering related terms...';
             extractBtn.disabled = true;
 
             try {
-                const res = await fetch('/api/extract', {
+                const res = await fetch('/api/expand', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ tokens, model: 'llama3:8b' })
+                    body: JSON.stringify({ seed, model: 'llama3:8b', count: 10 })
                 });
 
                 const data = await res.json();
                 if (data.status === 'success') {
-                    // Clear existing manifolds
                     manifolds.forEach(m => {
                         scene.remove(m.sphere);
                         scene.remove(m.sprite);
                     });
                     manifolds.length = 0;
 
-                    // Create new manifolds
                     data.data.forEach(createManifold);
                     
                     status.textContent = `✅ Rendered ${data.data.length} manifolds`;
