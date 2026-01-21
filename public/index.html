@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html>
+<body>
+  <canvas id="manifold-canvas"></canvas>
+  
+  <script type="module">
+    // Direct ESM import from our bundled 'deps' directory
+    import * as THREE from '/deps/three.js';
+    import Matter from '/deps/matter-js.js';
+
+    console.log("Three.js loaded:", THREE.REVISION);
+    console.log("Matter.js loaded:", Matter.version);
+
+    // Initialize your "Circles" simulation here...
+  </script>
+</body>
+</html>
