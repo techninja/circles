@@ -1,6 +1,7 @@
 fastapi==0.109.0
 uvicorn[standard]==0.27.0
 numpy==1.26.3
-umap-learn==0.5.5
+umap-learn==0.5.6
 pydantic==2.5.3
 requests==2.31.0
+scikit-learn==1.4.0

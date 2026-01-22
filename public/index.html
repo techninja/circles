@@ -91,7 +91,6 @@
             const sphere = new THREE.Mesh(geometry, material);
             sphere.position.set(data.x, data.y, data.z);
             
-            // Label
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
             canvas.width = 256;
@@ -109,6 +108,19 @@
             scene.add(sphere);
             scene.add(sprite);
             manifolds.push({ sphere, sprite, data });
+        }
+
+        function frameManifolds() {
+            if (manifolds.length === 0) return;
+            const box = new THREE.Box3();
+            manifolds.forEach(m => box.expandByObject(m.sphere));
+            const center = box.getCenter(new THREE.Vector3());
+            const size = box.getSize(new THREE.Vector3());
+            const maxDim = Math.max(size.x, size.y, size.z);
+            const fov = camera.fov * (Math.PI / 180);
+            const cameraZ = Math.abs(maxDim / 2 / Math.tan(fov / 2)) * 1.5;
+            camera.position.set(center.x, center.y, center.z + cameraZ);
+            camera.lookAt(center);
         }
 
         function animate() {
@@ -164,6 +176,7 @@
                     manifolds.length = 0;
 
                     data.data.forEach(createManifold);
+                    frameManifolds();
                     
                     status.textContent = `✅ Rendered ${data.data.length} manifolds`;
                     console.log('Manifold data:', data);
