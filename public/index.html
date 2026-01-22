@@ -81,15 +81,19 @@
         camera.position.z = 5;
 
         const manifolds = [];
+        const connections = [];
 
-        function createManifold(data) {
-            const geometry = new THREE.SphereGeometry(0.3, 32, 32);
+        function createManifold(data, allData) {
+            const geometry = new THREE.IcosahedronGeometry(0.4, 2);
             const material = new THREE.MeshBasicMaterial({ 
                 color: 0x00ff88, 
-                wireframe: true 
+                wireframe: true,
+                transparent: true,
+                opacity: 0.6
             });
             const sphere = new THREE.Mesh(geometry, material);
             sphere.position.set(data.x, data.y, data.z);
+            sphere.userData = { originalPos: new THREE.Vector3(data.x, data.y, data.z), velocity: new THREE.Vector3() };
             
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
@@ -108,6 +112,30 @@
             scene.add(sphere);
             scene.add(sprite);
             manifolds.push({ sphere, sprite, data });
+            
+            // Create connections to nearby manifolds
+            allData.forEach(other => {
+                if (other.label !== data.label) {
+                    const dist = Math.sqrt(
+                        Math.pow(data.x - other.x, 2) +
+                        Math.pow(data.y - other.y, 2) +
+                        Math.pow(data.z - other.z, 2)
+                    );
+                    if (dist < 2) {
+                        const lineMat = new THREE.LineBasicMaterial({ 
+                            color: 0x00ff88, 
+                            transparent: true, 
+                            opacity: 0.2 
+                        });
+                        const points = [new THREE.Vector3(data.x, data.y, data.z), 
+                                       new THREE.Vector3(other.x, other.y, other.z)];
+                        const lineGeom = new THREE.BufferGeometry().setFromPoints(points);
+                        const line = new THREE.Line(lineGeom, lineMat);
+                        scene.add(line);
+                        connections.push(line);
+                    }
+                }
+            });
         }
 
         function frameManifolds() {
@@ -125,7 +153,37 @@
 
         function animate() {
             requestAnimationFrame(animate);
-            manifolds.forEach(m => m.sphere.rotation.y += 0.01);
+            
+            // Elastic membrane physics
+            manifolds.forEach((m, i) => {
+                const sphere = m.sphere;
+                const vel = sphere.userData.velocity;
+                const orig = sphere.userData.originalPos;
+                
+                // Spring back to original position
+                const restoreForce = orig.clone().sub(sphere.position).multiplyScalar(0.02);
+                vel.add(restoreForce);
+                
+                // Repulsion from other manifolds
+                manifolds.forEach((other, j) => {
+                    if (i !== j) {
+                        const diff = sphere.position.clone().sub(other.sphere.position);
+                        const dist = diff.length();
+                        if (dist < 1.5) {
+                            vel.add(diff.normalize().multiplyScalar(0.01 / dist));
+                        }
+                    }
+                });
+                
+                vel.multiplyScalar(0.95); // Damping
+                sphere.position.add(vel);
+                m.sprite.position.copy(sphere.position).add(new THREE.Vector3(0, 0.5, 0));
+                
+                // Wobble effect
+                const scale = 1 + Math.sin(Date.now() * 0.001 + i) * 0.1;
+                sphere.scale.set(scale, scale, scale);
+            });
+            
             renderer.render(scene, camera);
         }
         animate();
@@ -164,18 +222,20 @@
                 const res = await fetch('/api/expand', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ seed, model: 'llama3:8b', count: 10 })
+                    body: JSON.stringify({ seed, model: 'llama3:8b', count: 30 })
                 });
 
                 const data = await res.json();
                 if (data.status === 'success') {
+                    connections.forEach(c => scene.remove(c));
+                    connections.length = 0;
                     manifolds.forEach(m => {
                         scene.remove(m.sphere);
                         scene.remove(m.sprite);
                     });
                     manifolds.length = 0;
 
-                    data.data.forEach(createManifold);
+                    data.data.forEach(d => createManifold(d, data.data));
                     frameManifolds();
                     
                     status.textContent = `✅ Rendered ${data.data.length} manifolds`;

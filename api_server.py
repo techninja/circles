@@ -18,7 +18,7 @@ class ExtractRequest(BaseModel):
 class ExpandRequest(BaseModel):
     seed: str
     model: Optional[str] = "llama3:8b"
-    count: Optional[int] = 10
+    count: Optional[int] = 30
 
 @app.post("/expand")
 async def expand_manifold(req: ExpandRequest):
