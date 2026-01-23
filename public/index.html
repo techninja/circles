@@ -32,6 +32,7 @@
 
     <script type="module">
         import * as THREE from 'three';
+        import { MarchingCubes } from 'three/addons/objects/MarchingCubes.js';
         import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
         const canvas = document.getElementById('canvas');
@@ -39,7 +40,6 @@
         const extractBtn = document.getElementById('extract');
         const tokensInput = document.getElementById('tokens');
 
-        // Three.js setup
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
         const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -50,32 +50,45 @@
         const controls = new OrbitControls(camera, canvas);
         controls.enableDamping = true;
 
-        // Lighting
         const light = new THREE.DirectionalLight(0x00ff88, 1);
         light.position.set(5, 5, 5);
         scene.add(light);
         scene.add(new THREE.AmbientLight(0x003322, 0.5));
 
-        let volumeMesh = null;
+        let marchingCubes = null;
 
-        function createVolumeVisualization(data) {
-            if (volumeMesh) scene.remove(volumeMesh);
+        function createMarchingCubes(data) {
+            if (marchingCubes) scene.remove(marchingCubes);
 
             const res = data.resolution;
             const field = data.field;
             
-            // Find min/max for better threshold
+            const material = new THREE.MeshPhongMaterial({
+                color: 0x00ff88,
+                shininess: 30,
+                transparent: true,
+                opacity: 0.85,
+                side: THREE.DoubleSide
+            });
+
+            marchingCubes = new MarchingCubes(res, material, true, true, 100000);
+            marchingCubes.position.set(0, 0, 0);
+            marchingCubes.scale.set(3, 3, 3);
+            marchingCubes.enableUvs = false;
+            marchingCubes.enableColors = false;
+            
+            scene.add(marchingCubes);
+            
+            // Add metaballs from scalar field
+            marchingCubes.reset();
+            
             const min = Math.min(...field);
             const max = Math.max(...field);
-            const threshold = min + (max - min) * 0.3; // Top 70% of values
-
-            console.log(`Volume stats: min=${min}, max=${max}, threshold=${threshold}`);
-            console.log(`Resolution: ${res}x${res}x${res} = ${field.length} values`);
-
-            const geometry = new THREE.BufferGeometry();
-            const positions = [];
-            const colors = [];
-
+            const threshold = min + (max - min) * 0.5;
+            
+            console.log(`Adding metaballs: threshold=${threshold}`);
+            
+            let ballCount = 0;
             for (let i = 0; i < res; i++) {
                 for (let j = 0; j < res; j++) {
                     for (let k = 0; k < res; k++) {
@@ -83,47 +96,26 @@
                         const value = field[idx];
                         
                         if (value > threshold) {
-                            const x = (i / res - 0.5) * 4;
-                            const y = (j / res - 0.5) * 4;
-                            const z = (k / res - 0.5) * 4;
+                            const x = (i / res - 0.5);
+                            const y = (j / res - 0.5);
+                            const z = (k / res - 0.5);
                             
-                            positions.push(x, y, z);
-                            
-                            // Color based on intensity
-                            const intensity = (value - min) / (max - min);
-                            colors.push(0, intensity, intensity * 0.5);
+                            marchingCubes.addBall(x, y, z, value * 0.3, 12);
+                            ballCount++;
                         }
                     }
                 }
             }
-
-            console.log(`Generated ${positions.length / 3} points`);
-
-            if (positions.length === 0) {
-                status.textContent = '❌ No points above threshold';
-                return;
-            }
-
-            geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-            geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
-
-            const material = new THREE.PointsMaterial({ 
-                size: 0.1, 
-                vertexColors: true,
-                transparent: true,
-                opacity: 0.8
-            });
-
-            volumeMesh = new THREE.Points(geometry, material);
-            scene.add(volumeMesh);
+            
+            console.log(`Added ${ballCount} metaballs`);
         }
 
         function animate() {
             requestAnimationFrame(animate);
             controls.update();
             
-            if (volumeMesh) {
-                volumeMesh.rotation.y += 0.002;
+            if (marchingCubes) {
+                marchingCubes.rotation.y += 0.003;
             }
             
             renderer.render(scene, camera);
@@ -136,7 +128,6 @@
             renderer.setSize(window.innerWidth, window.innerHeight);
         });
 
-        // WebSocket
         const ws = new WebSocket(`ws://${location.host}`);
         ws.onmessage = (e) => {
             const msg = JSON.parse(e.data);
@@ -148,7 +139,7 @@
 
         extractBtn.onclick = async () => {
             const seed = tokensInput.value.trim();
-            status.textContent = '⏳ Extracting volume (this may take 30s)...';
+            status.textContent = '⏳ Extracting volume (30s)...';
             extractBtn.disabled = true;
 
             try {
@@ -162,7 +153,7 @@
                 console.log('Received data:', data);
                 
                 if (data.status === 'success') {
-                    createVolumeVisualization(data.data);
+                    createMarchingCubes(data.data);
                     status.textContent = `✅ Manifold: ${seed}`;
                 } else {
                     status.textContent = `❌ ${data.detail || 'Unknown error'}`;
