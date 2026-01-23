@@ -38,7 +38,7 @@ let pythonReady = false;
 
 function startPythonAPI() {
   const pythonPath = process.platform === 'win32' ? 'venv\\Scripts\\python' : './venv/bin/python';
-  pythonProcess = spawn(pythonPath, ['api_server.py']);
+  pythonProcess = spawn(pythonPath, ['volume_server.py']);
   
   pythonProcess.stdout.on('data', (data) => {
     const output = data.toString();
@@ -103,6 +103,19 @@ app.post('/api/expand', async (req, res) => {
     res.json(response.data);
   } catch (error) {
     console.error('Expand API Error:', error.message);
+    res.status(500).json({ error: 'Python API unavailable' });
+  }
+});
+
+app.post('/api/volume', async (req, res) => {
+  if (!pythonReady) {
+    return res.status(503).json({ error: 'Python API still starting' });
+  }
+  try {
+    const response = await axios.post(`http://localhost:${PYTHON_API_PORT}/volume`, req.body, { timeout: 60000 });
+    res.json(response.data);
+  } catch (error) {
+    console.error('Volume API Error:', error.message);
     res.status(500).json({ error: 'Python API unavailable' });
   }
 });
