@@ -85,13 +85,30 @@
             
             mcubes.reset();
             
-            // Test with a single ball first
-            mcubes.addBall(0.5, 0.5, 0.5, 2, 12);
+            const min = Math.min(...field);
+            const max = Math.max(...field);
+            const range = max - min;
             
-            console.log('Added test ball, updating...');
+            console.log('Field stats:', { min, max, range });
+            
+            // Add balls where field is strong
+            let ballCount = 0;
+            for (let i = 0; i < res; i++) {
+                for (let j = 0; j < res; j++) {
+                    for (let k = 0; k < res; k++) {
+                        const idx = i * res * res + j * res + k;
+                        const normalized = (field[idx] - min) / range;
+                        
+                        if (normalized > 0.5) {
+                            mcubes.addBall(i/(res-1), j/(res-1), k/(res-1), 2, 12);
+                            ballCount++;
+                        }
+                    }
+                }
+            }
+            
+            console.log('Added', ballCount, 'balls');
             mcubes.update();
-            
-            console.log('After update - drawRange:', mcubes.geometry.drawRange, 'positionCount:', mcubes.geometry.attributes.position.count);
             scene.add(mcubes);
             
             console.log('MarchingCubes created:', {
