@@ -138,25 +138,50 @@ async def get_neighbors(req: NeighborsRequest):
 @app.post("/metaball")
 async def get_metaball(req: VolumeRequest):
     """Returns physics properties instead of a voxel grid"""
-    # ... (Keep embedding generation logic) ...
-    
-    # Calculate "Mass" and "Radius" based on semantic spread
-    # High variance in embeddings = Larger, fluffier concept
-    # Low variance = Tight, dense concept
-    centroid = embeddings.mean(axis=0)
-    distances = np.linalg.norm(embeddings - centroid, axis=1)
-    radius = float(np.mean(distances)) * 5.0  # Scale factor for visual
-    density = 1.0 / (float(np.std(distances)) + 0.1)
-
-    return {
-        "status": "success",
-        "data": {
-            "seed": req.seed,
-            "mass": density,
-            "radius": radius,
-            # We don't send X/Y/Z yet, the frontend physics engine determines that
+    try:
+        print(f"Extracting metaball for: {req.seed}")
+        
+        # Generate contextual variations
+        prompts = [
+            req.seed,
+            f"A {req.seed}",
+            f"The {req.seed}",
+            f"{req.seed} is",
+            f"About {req.seed}"
+        ]
+        
+        # Get embeddings
+        embeddings = []
+        for prompt in prompts:
+            res = requests.post('http://localhost:11434/api/embeddings',
+                json={"model": req.model, "prompt": prompt}, timeout=30)
+            embeddings.append(res.json()["embedding"])
+        
+        embeddings = np.array(embeddings)
+        
+        # Calculate semantic spread
+        centroid = embeddings.mean(axis=0)
+        distances = np.linalg.norm(embeddings - centroid, axis=1)
+        
+        # High variance = larger, fluffier concept
+        # Low variance = tight, dense concept
+        radius = float(np.mean(distances)) * 5.0
+        density = 1.0 / (float(np.std(distances)) + 0.1)
+        
+        print(f"Metaball: radius={radius}, density={density}")
+        
+        return {
+            "status": "success",
+            "data": {
+                "seed": req.seed,
+                "strength": density,
+                "radius": radius
+            }
         }
-    }
+    except Exception as e:
+        print(f"ERROR: {str(e)}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/health")
 async def health():

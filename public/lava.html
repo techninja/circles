@@ -8,11 +8,45 @@
             margin: 0;
             background: #000;
             overflow: hidden;
+            font-family: monospace;
+            color: #0f0;
+        }
+        #ui {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            z-index: 10;
+        }
+        input {
+            background: #111;
+            color: #0f0;
+            border: 1px solid #0f0;
+            padding: 8px;
+            width: 300px;
+        }
+        button {
+            background: #0f0;
+            color: #000;
+            border: none;
+            padding: 8px 16px;
+            cursor: pointer;
+        }
+        button:disabled {
+            opacity: 0.5;
+        }
+        #status {
+            margin-top: 10px;
+            font-size: 12px;
         }
     </style>
 </head>
 
 <body>
+    <div id="ui">
+        <input id="seed" placeholder="animalia" value="animalia">
+        <button id="extract">Extract Manifold</button>
+        <div id="status">Ready</div>
+    </div>
     <script type="importmap">
     {
         "imports": {
@@ -65,32 +99,105 @@
         scene.add(membrane);
 
         // 3. Concepts (The Physics Nodes)
-        const concepts = [
-            { label: "House", x: -2, y: 0, z: 0, radius: 1.5, strength: 1.5 }, // Base nodes
-            { label: "Home", x: 2, y: 0, z: 0, radius: 1.2, strength: 1.0 }
-        ];
+        let concepts = [];
+
+        async function loadConcept(seed, position) {
+            // Get neighbors
+            const neighRes = await fetch('/api/neighbors', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ seed, count: 3 })
+            });
+            const neighData = await neighRes.json();
+            
+            if (neighData.status === 'success') {
+                // Get metaball properties for seed
+                const seedRes = await fetch('/api/metaball', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ seed })
+                });
+                const seedMeta = await seedRes.json();
+                
+                if (seedMeta.status === 'success') {
+                    concepts.push({ 
+                        label: seed, 
+                        x: position.x, 
+                        y: position.y, 
+                        z: position.z, 
+                        strength: seedMeta.data.strength,
+                        radius: seedMeta.data.radius,
+                        vx: 0, vy: 0, vz: 0 
+                    });
+                }
+                
+                // Get metaball properties for neighbors
+                const radius = 4;
+                for (let i = 0; i < neighData.neighbors.length; i++) {
+                    const neighbor = neighData.neighbors[i];
+                    const angle = (i / neighData.neighbors.length) * Math.PI * 2;
+                    
+                    const nRes = await fetch('/api/metaball', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ seed: neighbor })
+                    });
+                    const nMeta = await nRes.json();
+                    
+                    if (nMeta.status === 'success') {
+                        concepts.push({
+                            label: neighbor,
+                            x: position.x + Math.cos(angle) * radius,
+                            y: position.y,
+                            z: position.z + Math.sin(angle) * radius,
+                            strength: nMeta.data.strength,
+                            radius: nMeta.data.radius,
+                            vx: 0, vy: 0, vz: 0
+                        });
+                    }
+                }
+            }
+        }
 
         // Simple spring physics loop
         function updatePhysics() {
-            // Pull concepts together (Attraction)
-            const k = 0.05; // Spring constant
-            const restLength = 1.0;
+            const k = 0.01;
+            const damping = 0.95;
+            const restLength = 3.0;
 
-            // Example: Pull 'Home' towards 'House'
-            const dx = concepts[1].x - concepts[0].x;
-            const dy = concepts[1].y - concepts[0].y;
-            const dist = Math.sqrt(dx * dx + dy * dy);
+            // Apply spring forces between all concepts
+            for (let i = 0; i < concepts.length; i++) {
+                for (let j = i + 1; j < concepts.length; j++) {
+                    const dx = concepts[j].x - concepts[i].x;
+                    const dy = concepts[j].y - concepts[i].y;
+                    const dz = concepts[j].z - concepts[i].z;
+                    const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
 
-            if (dist > restLength) {
-                const force = (dist - restLength) * k;
-                const fx = (dx / dist) * force;
-                const fy = (dy / dist) * force;
+                    if (dist > 0.1) {
+                        const force = (dist - restLength) * k;
+                        const fx = (dx / dist) * force;
+                        const fy = (dy / dist) * force;
+                        const fz = (dz / dist) * force;
 
-                concepts[0].x += fx;
-                concepts[0].y += fy;
-                concepts[1].x -= fx;
-                concepts[1].y -= fy;
+                        concepts[i].vx += fx;
+                        concepts[i].vy += fy;
+                        concepts[i].vz += fz;
+                        concepts[j].vx -= fx;
+                        concepts[j].vy -= fy;
+                        concepts[j].vz -= fz;
+                    }
+                }
             }
+
+            // Update positions
+            concepts.forEach(c => {
+                c.x += c.vx;
+                c.y += c.vy;
+                c.z += c.vz;
+                c.vx *= damping;
+                c.vy *= damping;
+                c.vz *= damping;
+            });
         }
 
         // 4. Render Loop
@@ -117,6 +224,27 @@
             renderer.render(scene, camera);
         }
         animate();
+
+        // UI
+        const extractBtn = document.getElementById('extract');
+        const seedInput = document.getElementById('seed');
+        const status = document.getElementById('status');
+
+        extractBtn.onclick = async () => {
+            const seed = seedInput.value.trim();
+            status.textContent = '⏳ Loading...';
+            extractBtn.disabled = true;
+            concepts = [];
+
+            try {
+                await loadConcept(seed, { x: 0, y: 0, z: 0 });
+                status.textContent = `✅ ${seed} + ${concepts.length - 1} neighbors`;
+            } catch (err) {
+                status.textContent = `❌ ${err.message}`;
+            } finally {
+                extractBtn.disabled = false;
+            }
+        };
     </script>
 </body>
 
