@@ -56,18 +56,14 @@
 
         let marchingCubes = null;
         let label = null;
+        const manifolds = [];
 
-        function createMarchingCubes(data) {
-            if (marchingCubes) scene.remove(marchingCubes);
-            if (label) scene.remove(label);
-
+        function createManifold(data, position = { x: 0, y: 0, z: 0 }) {
             const res = data.resolution;
             const field = data.field;
             
             const min = Math.min(...field);
             const max = Math.max(...field);
-            
-            console.log(`Creating smooth manifold`);
             
             const sphereGeom = new THREE.SphereGeometry(0.08, 8, 8);
             const material = new THREE.MeshPhongMaterial({
@@ -96,8 +92,6 @@
                 }
             }
             
-            console.log(`Creating ${positions.length} spheres`);
-            
             const instancedMesh = new THREE.InstancedMesh(sphereGeom, material, positions.length);
             const matrix = new THREE.Matrix4();
             
@@ -109,8 +103,8 @@
             });
             
             instancedMesh.instanceMatrix.needsUpdate = true;
-            marchingCubes = instancedMesh;
-            scene.add(marchingCubes);
+            instancedMesh.position.set(position.x, position.y, position.z);
+            scene.add(instancedMesh);
             
             // Add label
             const canvas = document.createElement('canvas');
@@ -124,19 +118,33 @@
             
             const texture = new THREE.CanvasTexture(canvas);
             const spriteMaterial = new THREE.SpriteMaterial({ map: texture });
-            label = new THREE.Sprite(spriteMaterial);
-            label.scale.set(2, 0.5, 1);
-            label.position.set(0, 3, 0);
-            scene.add(label);
+            const labelSprite = new THREE.Sprite(spriteMaterial);
+            labelSprite.scale.set(2, 0.5, 1);
+            labelSprite.position.set(position.x, position.y + 3, position.z);
+            scene.add(labelSprite);
+            
+            manifolds.push({ mesh: instancedMesh, label: labelSprite, seed: data.seed });
+        }
+
+        function createMarchingCubes(data) {
+            // Clear old manifolds
+            manifolds.forEach(m => {
+                scene.remove(m.mesh);
+                scene.remove(m.label);
+            });
+            manifolds.length = 0;
+            
+            // Create center manifold
+            createManifold(data, { x: 0, y: 0, z: 0 });
         }
 
         function animate() {
             requestAnimationFrame(animate);
             controls.update();
             
-            if (marchingCubes) {
-                marchingCubes.rotation.y += 0.003;
-            }
+            manifolds.forEach(m => {
+                m.mesh.rotation.y += 0.002;
+            });
             
             renderer.render(scene, camera);
         }
@@ -163,20 +171,56 @@
             extractBtn.disabled = true;
 
             try {
-                const res = await fetch('/api/volume', {
+                // Get seed volume
+                const volRes = await fetch('/api/volume', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ seed, model: 'llama3:8b', resolution: 32 })
                 });
 
-                const data = await res.json();
-                console.log('Received data:', data);
+                const volData = await volRes.json();
+                console.log('Received volume:', volData);
                 
-                if (data.status === 'success') {
-                    createMarchingCubes(data.data);
-                    status.textContent = `✅ Manifold: ${seed}`;
+                if (volData.status === 'success') {
+                    createMarchingCubes(volData.data);
+                    status.textContent = `✅ ${seed} | Finding neighbors...`;
+                    
+                    // Get neighbors
+                    const neighRes = await fetch('/api/neighbors', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ seed, model: 'llama3:8b', count: 3 })
+                    });
+                    
+                    const neighData = await neighRes.json();
+                    console.log('Neighbors:', neighData);
+                    
+                    if (neighData.status === 'success') {
+                        // Position neighbors in circle around seed
+                        const radius = 6;
+                        for (let i = 0; i < neighData.neighbors.length; i++) {
+                            const angle = (i / neighData.neighbors.length) * Math.PI * 2;
+                            const x = Math.cos(angle) * radius;
+                            const z = Math.sin(angle) * radius;
+                            
+                            status.textContent = `⏳ Loading ${neighData.neighbors[i]}...`;
+                            
+                            const nVolRes = await fetch('/api/volume', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ seed: neighData.neighbors[i], model: 'llama3:8b', resolution: 32 })
+                            });
+                            
+                            const nVolData = await nVolRes.json();
+                            if (nVolData.status === 'success') {
+                                createManifold(nVolData.data, { x, y: 0, z });
+                            }
+                        }
+                        
+                        status.textContent = `✅ Manifold: ${seed} + ${neighData.neighbors.length} neighbors`;
+                    }
                 } else {
-                    status.textContent = `❌ ${data.detail || 'Unknown error'}`;
+                    status.textContent = `❌ ${volData.detail || 'Unknown error'}`;
                 }
             } catch (err) {
                 status.textContent = `❌ ${err.message}`;
