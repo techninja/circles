@@ -80,34 +80,18 @@
             
             const mcubes = new MarchingCubes(res, material, false, false, 500000);
             mcubes.position.set(position.x, position.y, position.z);
-            mcubes.scale.set(1, 1, 1);
-            mcubes.isolation = 50;
+            mcubes.scale.set(3, 3, 3);
+            mcubes.isolation = 80;
             
             mcubes.reset();
             
-            const min = Math.min(...field);
-            const max = Math.max(...field);
-            const range = max - min;
+            // Test with a single ball first
+            mcubes.addBall(0.5, 0.5, 0.5, 2, 12);
             
-            for (let i = 0; i < res; i++) {
-                for (let j = 0; j < res; j++) {
-                    for (let k = 0; k < res; k++) {
-                        const idx = i * res * res + j * res + k;
-                        const value = field[idx];
-                        const normalized = (value - min) / range;
-                        
-                        if (normalized > 0.3) {
-                            const x = i / (res - 1);
-                            const y = j / (res - 1);
-                            const z = k / (res - 1);
-                            const strength = normalized * 80;
-                            mcubes.addBall(x, y, z, strength, 12);
-                        }
-                    }
-                }
-            }
-            
+            console.log('Added test ball, updating...');
             mcubes.update();
+            
+            console.log('After update - drawRange:', mcubes.geometry.drawRange, 'positionCount:', mcubes.geometry.attributes.position.count);
             scene.add(mcubes);
             
             console.log('MarchingCubes created:', {
