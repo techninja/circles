@@ -15,6 +15,11 @@ class VolumeRequest(BaseModel):
     model: Optional[str] = "llama3:8b"
     resolution: Optional[int] = 32
 
+class NeighborsRequest(BaseModel):
+    seed: str
+    model: Optional[str] = "llama3:8b"
+    count: Optional[int] = 5
+
 @app.post("/volume")
 async def extract_volume(req: VolumeRequest):
     """Extract 3D scalar field for iso-surface rendering"""
@@ -104,6 +109,27 @@ async def extract_volume(req: VolumeRequest):
                 "seed": req.seed
             }
         }
+    except Exception as e:
+        print(f"ERROR: {str(e)}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/neighbors")
+async def get_neighbors(req: NeighborsRequest):
+    """Get semantically related neighbor concepts"""
+    try:
+        print(f"Finding neighbors for: {req.seed}")
+        
+        prompt = f"List {req.count} related concepts to '{req.seed}'. Only output comma-separated words:"
+        res = requests.post('http://localhost:11434/api/generate',
+            json={"model": req.model, "prompt": prompt, "stream": False}, timeout=30)
+        
+        response_text = res.json()["response"].strip()
+        neighbors = [t.strip() for t in response_text.replace('\n', ',').split(',') if t.strip()][:req.count]
+        
+        print(f"Found neighbors: {neighbors}")
+        
+        return {"status": "success", "neighbors": neighbors}
     except Exception as e:
         print(f"ERROR: {str(e)}")
         traceback.print_exc()

@@ -120,6 +120,19 @@ app.post('/api/volume', async (req, res) => {
   }
 });
 
+app.post('/api/neighbors', async (req, res) => {
+  if (!pythonReady) {
+    return res.status(503).json({ error: 'Python API still starting' });
+  }
+  try {
+    const response = await axios.post(`http://localhost:${PYTHON_API_PORT}/neighbors`, req.body);
+    res.json(response.data);
+  } catch (error) {
+    console.error('Neighbors API Error:', error.message);
+    res.status(500).json({ error: 'Python API unavailable' });
+  }
+});
+
 app.get('/api/health', async (req, res) => {
   try {
     const response = await axios.get(`http://localhost:${PYTHON_API_PORT}/health`);

@@ -55,9 +55,11 @@
         scene.add(new THREE.AmbientLight(0x003322, 0.5));
 
         let marchingCubes = null;
+        let label = null;
 
         function createMarchingCubes(data) {
             if (marchingCubes) scene.remove(marchingCubes);
+            if (label) scene.remove(label);
 
             const res = data.resolution;
             const field = data.field;
@@ -67,7 +69,6 @@
             
             console.log(`Creating smooth manifold`);
             
-            // Use instanced mesh for smooth appearance
             const sphereGeom = new THREE.SphereGeometry(0.08, 8, 8);
             const material = new THREE.MeshPhongMaterial({
                 color: 0x00ff88,
@@ -110,6 +111,23 @@
             instancedMesh.instanceMatrix.needsUpdate = true;
             marchingCubes = instancedMesh;
             scene.add(marchingCubes);
+            
+            // Add label
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            canvas.width = 512;
+            canvas.height = 128;
+            ctx.fillStyle = '#0f0';
+            ctx.font = 'bold 48px monospace';
+            ctx.textAlign = 'center';
+            ctx.fillText(data.seed, 256, 80);
+            
+            const texture = new THREE.CanvasTexture(canvas);
+            const spriteMaterial = new THREE.SpriteMaterial({ map: texture });
+            label = new THREE.Sprite(spriteMaterial);
+            label.scale.set(2, 0.5, 1);
+            label.position.set(0, 3, 0);
+            scene.add(label);
         }
 
         function animate() {
