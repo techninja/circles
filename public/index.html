@@ -75,14 +75,13 @@
                 color: 0x00ff88,
                 shininess: 80,
                 specular: 0x00ffaa,
-                transparent: true,
-                opacity: 0.85
+                side: THREE.DoubleSide
             });
             
-            const mcubes = new MarchingCubes(res, material, true, true, 100000);
+            const mcubes = new MarchingCubes(res, material, false, false, 500000);
             mcubes.position.set(position.x, position.y, position.z);
-            mcubes.scale.set(2, 2, 2);
-            mcubes.isolation = 80;
+            mcubes.scale.set(1, 1, 1);
+            mcubes.isolation = 50;
             
             mcubes.reset();
             
