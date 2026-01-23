@@ -32,7 +32,6 @@
 
     <script type="module">
         import * as THREE from 'three';
-        import { MarchingCubes } from 'three/addons/objects/MarchingCubes.js';
         import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
         const canvas = document.getElementById('canvas');
@@ -63,51 +62,74 @@
             const res = data.resolution;
             const field = data.field;
             
-            const material = new THREE.MeshPhongMaterial({
-                color: 0x00ff88,
-                shininess: 30,
-                transparent: true,
-                opacity: 0.85,
-                side: THREE.DoubleSide
-            });
-
-            marchingCubes = new MarchingCubes(res, material, true, true, 100000);
-            marchingCubes.position.set(0, 0, 0);
-            marchingCubes.scale.set(3, 3, 3);
-            marchingCubes.enableUvs = false;
-            marchingCubes.enableColors = false;
-            
-            scene.add(marchingCubes);
-            
-            // Add metaballs from scalar field
-            marchingCubes.reset();
-            
             const min = Math.min(...field);
             const max = Math.max(...field);
             const threshold = min + (max - min) * 0.5;
             
-            console.log(`Adding metaballs: threshold=${threshold}`);
+            console.log(`Creating mesh: threshold=${threshold}`);
             
-            let ballCount = 0;
-            for (let i = 0; i < res; i++) {
-                for (let j = 0; j < res; j++) {
-                    for (let k = 0; k < res; k++) {
+            // Create simple mesh from high-value voxels
+            const geometry = new THREE.BufferGeometry();
+            const positions = [];
+            const indices = [];
+            
+            let vertexIndex = 0;
+            for (let i = 0; i < res - 1; i++) {
+                for (let j = 0; j < res - 1; j++) {
+                    for (let k = 0; k < res - 1; k++) {
                         const idx = i * res * res + j * res + k;
                         const value = field[idx];
                         
                         if (value > threshold) {
-                            const x = (i / res - 0.5);
-                            const y = (j / res - 0.5);
-                            const z = (k / res - 0.5);
+                            const x = (i / res - 0.5) * 4;
+                            const y = (j / res - 0.5) * 4;
+                            const z = (k / res - 0.5) * 4;
+                            const size = 0.1;
                             
-                            marchingCubes.addBall(x, y, z, value * 0.3, 12);
-                            ballCount++;
+                            // Simple cube
+                            const v = vertexIndex;
+                            positions.push(
+                                x, y, z,
+                                x + size, y, z,
+                                x + size, y + size, z,
+                                x, y + size, z,
+                                x, y, z + size,
+                                x + size, y, z + size,
+                                x + size, y + size, z + size,
+                                x, y + size, z + size
+                            );
+                            
+                            indices.push(
+                                v, v+1, v+2, v, v+2, v+3,
+                                v+4, v+5, v+6, v+4, v+6, v+7,
+                                v, v+1, v+5, v, v+5, v+4,
+                                v+2, v+3, v+7, v+2, v+7, v+6,
+                                v, v+3, v+7, v, v+7, v+4,
+                                v+1, v+2, v+6, v+1, v+6, v+5
+                            );
+                            
+                            vertexIndex += 8;
                         }
                     }
                 }
             }
             
-            console.log(`Added ${ballCount} metaballs`);
+            console.log(`Generated ${positions.length / 3} vertices, ${indices.length / 3} triangles`);
+            
+            geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+            geometry.setIndex(indices);
+            geometry.computeVertexNormals();
+            
+            const material = new THREE.MeshPhongMaterial({
+                color: 0x00ff88,
+                shininess: 30,
+                transparent: true,
+                opacity: 0.7,
+                side: THREE.DoubleSide
+            });
+            
+            marchingCubes = new THREE.Mesh(geometry, material);
+            scene.add(marchingCubes);
         }
 
         function animate() {
