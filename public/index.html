@@ -32,7 +32,6 @@
 
     <script type="module">
         import * as THREE from 'three';
-        import { MarchingCubes } from 'three/addons/objects/MarchingCubes.js';
         import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
         const canvas = document.getElementById('canvas');
@@ -57,41 +56,22 @@
         scene.add(light);
         scene.add(new THREE.AmbientLight(0x003322, 0.5));
 
-        let marchingCubes = null;
-        let volumeData = null;
+        let volumeMesh = null;
 
-        function createMarchingCubes(data) {
-            if (marchingCubes) scene.remove(marchingCubes);
+        function createVolumeVisualization(data) {
+            if (volumeMesh) scene.remove(volumeMesh);
 
-            const resolution = data.resolution;
-            const material = new THREE.MeshPhongMaterial({
-                color: 0x00ff88,
-                shininess: 30,
-                transparent: true,
-                opacity: 0.9,
-                side: THREE.DoubleSide
-            });
+            const res = data.resolution;
+            const field = data.field;
+            const threshold = 0.5;
 
-            marchingCubes = new MarchingCubes(resolution, material, true, true);
-            marchingCubes.position.set(0, 0, 0);
-            marchingCubes.scale.set(2, 2, 2);
-            
-            scene.add(marchingCubes);
-            volumeData = data;
-            
-            updateMarchingCubes();
-        }
+            console.log(`Creating volume: res=${res}, field length=${field.length}`);
 
-        function updateMarchingCubes() {
-            if (!marchingCubes || !volumeData) return;
+            // Create point cloud for high-value regions
+            const geometry = new THREE.BufferGeometry();
+            const positions = [];
+            const colors = [];
 
-            marchingCubes.reset();
-            
-            const res = volumeData.resolution;
-            const field = volumeData.field;
-            const threshold = 0.3;
-
-            // Add metaballs based on scalar field
             for (let i = 0; i < res; i++) {
                 for (let j = 0; j < res; j++) {
                     for (let k = 0; k < res; k++) {
@@ -99,23 +79,39 @@
                         const value = field[idx];
                         
                         if (value > threshold) {
-                            const x = (i / res - 0.5) * 2;
-                            const y = (j / res - 0.5) * 2;
-                            const z = (k / res - 0.5) * 2;
+                            const x = (i / res - 0.5) * 4;
+                            const y = (j / res - 0.5) * 4;
+                            const z = (k / res - 0.5) * 4;
                             
-                            marchingCubes.addBall(x, y, z, value * 0.5, 10);
+                            positions.push(x, y, z);
+                            colors.push(0, value, value * 0.5);
                         }
                     }
                 }
             }
+
+            console.log(`Generated ${positions.length / 3} points`);
+
+            geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+            geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+
+            const material = new THREE.PointsMaterial({ 
+                size: 0.05, 
+                vertexColors: true,
+                transparent: true,
+                opacity: 0.8
+            });
+
+            volumeMesh = new THREE.Points(geometry, material);
+            scene.add(volumeMesh);
         }
 
         function animate() {
             requestAnimationFrame(animate);
             controls.update();
             
-            if (marchingCubes) {
-                marchingCubes.rotation.y += 0.002;
+            if (volumeMesh) {
+                volumeMesh.rotation.y += 0.002;
             }
             
             renderer.render(scene, camera);
@@ -151,8 +147,10 @@
                 });
 
                 const data = await res.json();
+                console.log('Received data:', data);
+                
                 if (data.status === 'success') {
-                    createMarchingCubes(data.data);
+                    createVolumeVisualization(data.data);
                     status.textContent = `✅ Manifold: ${seed}`;
                 } else {
                     status.textContent = `❌ ${data.detail || 'Unknown error'}`;
