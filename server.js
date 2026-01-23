@@ -146,6 +146,19 @@ app.post('/api/metaball', async (req, res) => {
   }
 });
 
+app.post('/api/hierarchy', async (req, res) => {
+  if (!pythonReady) {
+    return res.status(503).json({ error: 'Python API still starting' });
+  }
+  try {
+    const response = await axios.post(`http://localhost:${PYTHON_API_PORT}/hierarchy`, req.body);
+    res.json(response.data);
+  } catch (error) {
+    console.error('Hierarchy API Error:', error.message);
+    res.status(500).json({ error: 'Python API unavailable' });
+  }
+});
+
 app.get('/api/health', async (req, res) => {
   try {
     const response = await axios.get(`http://localhost:${PYTHON_API_PORT}/health`);

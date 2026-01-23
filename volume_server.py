@@ -20,6 +20,11 @@ class NeighborsRequest(BaseModel):
     model: Optional[str] = "llama3:8b"
     count: Optional[int] = 5
 
+class HierarchyRequest(BaseModel):
+    seed: str
+    model: Optional[str] = "llama3:8b"
+    depth: Optional[int] = 2
+
 @app.post("/volume")
 async def extract_volume(req: VolumeRequest):
     """Extract 3D scalar field for iso-surface rendering"""
@@ -135,9 +140,40 @@ async def get_neighbors(req: NeighborsRequest):
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.post("/hierarchy")
+async def get_hierarchy(req: HierarchyRequest):
+    """Get parent (broader) and child (narrower) concepts"""
+    try:
+        print(f"Finding hierarchy for: {req.seed}")
+        
+        # Get parent (broader category)
+        parent_prompt = f"What is the broader category that contains '{req.seed}'? One word only:"
+        parent_res = requests.post('http://localhost:11434/api/generate',
+            json={"model": req.model, "prompt": parent_prompt, "stream": False}, timeout=30)
+        parent = parent_res.json()["response"].strip().split()[0].strip('.,!?')
+        
+        # Get children (specific examples)
+        children_prompt = f"List {req.depth} specific types or examples of '{req.seed}'. Only comma-separated words:"
+        children_res = requests.post('http://localhost:11434/api/generate',
+            json={"model": req.model, "prompt": children_prompt, "stream": False}, timeout=30)
+        children_text = children_res.json()["response"].strip()
+        children = [t.strip() for t in children_text.replace('\n', ',').split(',') if t.strip()][:req.depth]
+        
+        print(f"Hierarchy: {parent} > {req.seed} > {children}")
+        
+        return {
+            "status": "success",
+            "parent": parent,
+            "children": children
+        }
+    except Exception as e:
+        print(f"ERROR: {str(e)}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.post("/metaball")
 async def get_metaball(req: VolumeRequest):
-    """Returns physics properties instead of a voxel grid"""
+    """Returns physics properties and 3D position from embedding space"""
     try:
         print(f"Extracting metaball for: {req.seed}")
         
@@ -175,7 +211,8 @@ async def get_metaball(req: VolumeRequest):
             "data": {
                 "seed": req.seed,
                 "strength": density,
-                "radius": radius
+                "radius": radius,
+                "centroid": centroid.tolist()  # Return full embedding centroid
             }
         }
     except Exception as e:

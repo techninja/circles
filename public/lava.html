@@ -101,6 +101,21 @@
         // 3. Concepts (The Physics Nodes)
         let concepts = [];
         const labels = [];
+        let allCentroids = [];
+
+        function projectTo3D(centroids) {
+            // Use PCA to project high-dim centroids to 3D
+            const matrix = centroids.map(c => c.slice(0, 100)); // Use first 100 dims for speed
+            const mean = matrix[0].map((_, i) => matrix.reduce((sum, row) => sum + row[i], 0) / matrix.length);
+            const centered = matrix.map(row => row.map((val, i) => val - mean[i]));
+            
+            // Simple projection: use first 3 dimensions scaled
+            return centered.map(row => ({
+                x: row[0] * 10,
+                y: row[1] * 10,
+                z: row[2] * 10
+            }));
+        }
 
         function createLabel(text, position) {
             const canvas = document.createElement('canvas');
@@ -122,67 +137,52 @@
         }
 
         async function loadConcept(seed, position) {
-            // Get neighbors
-            const neighRes = await fetch('/api/neighbors', {
+            // Get hierarchy
+            const hierRes = await fetch('/api/hierarchy', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ seed, count: 3 })
+                body: JSON.stringify({ seed, depth: 3 })
             });
-            const neighData = await neighRes.json();
+            const hierData = await hierRes.json();
             
-            if (neighData.status === 'success') {
-                // Get metaball properties for seed
-                const seedRes = await fetch('/api/metaball', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ seed })
-                });
-                const seedMeta = await seedRes.json();
+            if (hierData.status === 'success') {
+                const allSeeds = [hierData.parent, seed, ...hierData.children];
+                const metaballs = [];
                 
-                if (seedMeta.status === 'success') {
-                    concepts.push({ 
-                        label: seed, 
-                        x: position.x, 
-                        y: position.y, 
-                        z: position.z, 
-                        strength: seedMeta.data.strength,
-                        radius: seedMeta.data.radius,
-                        vx: 0, vy: 0, vz: 0 
-                    });
-                    labels.push(createLabel(seed, position));
-                }
-                
-                // Get metaball properties for neighbors
-                const radius = 4;
-                for (let i = 0; i < neighData.neighbors.length; i++) {
-                    const neighbor = neighData.neighbors[i];
-                    const angle = (i / neighData.neighbors.length) * Math.PI * 2;
-                    
-                    const nRes = await fetch('/api/metaball', {
+                // Get metaball data for all concepts
+                for (const s of allSeeds) {
+                    const res = await fetch('/api/metaball', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ seed: neighbor })
+                        body: JSON.stringify({ seed: s })
                     });
-                    const nMeta = await nRes.json();
-                    
-                    if (nMeta.status === 'success') {
-                        const pos = {
-                            x: position.x + Math.cos(angle) * radius,
-                            y: position.y,
-                            z: position.z + Math.sin(angle) * radius
-                        };
-                        concepts.push({
-                            label: neighbor,
-                            x: pos.x,
-                            y: pos.y,
-                            z: pos.z,
-                            strength: nMeta.data.strength,
-                            radius: nMeta.data.radius,
-                            vx: 0, vy: 0, vz: 0
-                        });
-                        labels.push(createLabel(neighbor, pos));
+                    const meta = await res.json();
+                    if (meta.status === 'success') {
+                        metaballs.push(meta.data);
                     }
                 }
+                
+                // Project all centroids to 3D
+                allCentroids = metaballs.map(m => m.centroid);
+                const positions3d = projectTo3D(allCentroids);
+                
+                // Create concepts with semantic positions
+                // Parent gets larger strength to encompass children
+                metaballs.forEach((meta, i) => {
+                    const isParent = i === 0;
+                    const isSeed = i === 1;
+                    
+                    concepts.push({
+                        label: meta.seed,
+                        x: positions3d[i].x,
+                        y: positions3d[i].y,
+                        z: positions3d[i].z,
+                        strength: isParent ? meta.strength * 2 : meta.strength,
+                        radius: isParent ? meta.radius * 1.5 : meta.radius,
+                        vx: 0, vy: 0, vz: 0
+                    });
+                    labels.push(createLabel(meta.seed, positions3d[i]));
+                });
             }
         }
 
