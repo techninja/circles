@@ -75,7 +75,7 @@
             const mcubes = new MarchingCubes(res, material, true, true, 100000);
             mcubes.position.set(position.x, position.y, position.z);
             mcubes.scale.set(2, 2, 2);
-            mcubes.isolation = 50;
+            mcubes.isolation = 80;
             
             mcubes.reset();
             
@@ -94,13 +94,14 @@
                             const x = i / (res - 1);
                             const y = j / (res - 1);
                             const z = k / (res - 1);
-                            const strength = normalized * 100;
-                            mcubes.addBall(x, y, z, strength, 10);
+                            const strength = normalized * 80;
+                            mcubes.addBall(x, y, z, strength, 12);
                         }
                     }
                 }
             }
             
+            mcubes.update();
             scene.add(mcubes);
             
             const canvas = document.createElement('canvas');
