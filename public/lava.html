@@ -37,6 +37,12 @@
 
         const controls = new OrbitControls(camera, renderer.domElement);
 
+        // Add lights
+        const light = new THREE.DirectionalLight(0xffffff, 1);
+        light.position.set(5, 5, 5);
+        scene.add(light);
+        scene.add(new THREE.AmbientLight(0x404040, 0.5));
+
         // 2. The "Membrane" (Marching Cubes)
         // This is the single mesh that will hold ALL concepts
         const resolution = 64;
@@ -54,7 +60,8 @@
 
         const membrane = new MarchingCubes(resolution, material, true, true, 100000);
         membrane.position.set(0, 0, 0);
-        membrane.scale.set(10, 10, 10); // Scale up to fill view
+        membrane.scale.set(10, 10, 10);
+        membrane.isolation = 80; // Critical: sets the iso-surface threshold
         scene.add(membrane);
 
         // 3. Concepts (The Physics Nodes)
@@ -102,7 +109,7 @@
                 const gz = (c.z / 10) + 0.5;
 
                 // addBall(x, y, z, strength, subtract_offset, color)
-                membrane.addBall(gx, qy, gz, c.strength, 12);
+                membrane.addBall(gx, qy, gz, c.strength, 10);
             });
 
             // Update the mesh geometry
