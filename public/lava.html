@@ -100,6 +100,26 @@
 
         // 3. Concepts (The Physics Nodes)
         let concepts = [];
+        const labels = [];
+
+        function createLabel(text, position) {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            canvas.width = 256;
+            canvas.height = 64;
+            ctx.fillStyle = '#0f0';
+            ctx.font = 'bold 24px monospace';
+            ctx.textAlign = 'center';
+            ctx.fillText(text, 128, 40);
+            
+            const texture = new THREE.CanvasTexture(canvas);
+            const spriteMaterial = new THREE.SpriteMaterial({ map: texture });
+            const sprite = new THREE.Sprite(spriteMaterial);
+            sprite.scale.set(2, 0.5, 1);
+            sprite.position.set(position.x, position.y + 2, position.z);
+            scene.add(sprite);
+            return sprite;
+        }
 
         async function loadConcept(seed, position) {
             // Get neighbors
@@ -129,6 +149,7 @@
                         radius: seedMeta.data.radius,
                         vx: 0, vy: 0, vz: 0 
                     });
+                    labels.push(createLabel(seed, position));
                 }
                 
                 // Get metaball properties for neighbors
@@ -145,15 +166,21 @@
                     const nMeta = await nRes.json();
                     
                     if (nMeta.status === 'success') {
-                        concepts.push({
-                            label: neighbor,
+                        const pos = {
                             x: position.x + Math.cos(angle) * radius,
                             y: position.y,
-                            z: position.z + Math.sin(angle) * radius,
+                            z: position.z + Math.sin(angle) * radius
+                        };
+                        concepts.push({
+                            label: neighbor,
+                            x: pos.x,
+                            y: pos.y,
+                            z: pos.z,
                             strength: nMeta.data.strength,
                             radius: nMeta.data.radius,
                             vx: 0, vy: 0, vz: 0
                         });
+                        labels.push(createLabel(neighbor, pos));
                     }
                 }
             }
@@ -190,13 +217,18 @@
             }
 
             // Update positions
-            concepts.forEach(c => {
+            concepts.forEach((c, i) => {
                 c.x += c.vx;
                 c.y += c.vy;
                 c.z += c.vz;
                 c.vx *= damping;
                 c.vy *= damping;
                 c.vz *= damping;
+                
+                // Update label position
+                if (labels[i]) {
+                    labels[i].position.set(c.x, c.y + 2, c.z);
+                }
             });
         }
 
@@ -235,6 +267,8 @@
             status.textContent = '⏳ Loading...';
             extractBtn.disabled = true;
             concepts = [];
+            labels.forEach(l => scene.remove(l));
+            labels.length = 0;
 
             try {
                 await loadConcept(seed, { x: 0, y: 0, z: 0 });
