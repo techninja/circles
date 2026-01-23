@@ -64,19 +64,24 @@
             
             const min = Math.min(...field);
             const max = Math.max(...field);
+            
+            console.log(`Creating smooth manifold`);
+            
+            // Use instanced mesh for smooth appearance
+            const sphereGeom = new THREE.SphereGeometry(0.08, 8, 8);
+            const material = new THREE.MeshPhongMaterial({
+                color: 0x00ff88,
+                shininess: 30,
+                transparent: true,
+                opacity: 0.6
+            });
+            
+            const positions = [];
             const threshold = min + (max - min) * 0.5;
             
-            console.log(`Creating mesh: threshold=${threshold}`);
-            
-            // Create simple mesh from high-value voxels
-            const geometry = new THREE.BufferGeometry();
-            const positions = [];
-            const indices = [];
-            
-            let vertexIndex = 0;
-            for (let i = 0; i < res - 1; i++) {
-                for (let j = 0; j < res - 1; j++) {
-                    for (let k = 0; k < res - 1; k++) {
+            for (let i = 0; i < res; i++) {
+                for (let j = 0; j < res; j++) {
+                    for (let k = 0; k < res; k++) {
                         const idx = i * res * res + j * res + k;
                         const value = field[idx];
                         
@@ -84,51 +89,26 @@
                             const x = (i / res - 0.5) * 4;
                             const y = (j / res - 0.5) * 4;
                             const z = (k / res - 0.5) * 4;
-                            const size = 0.1;
-                            
-                            // Simple cube
-                            const v = vertexIndex;
-                            positions.push(
-                                x, y, z,
-                                x + size, y, z,
-                                x + size, y + size, z,
-                                x, y + size, z,
-                                x, y, z + size,
-                                x + size, y, z + size,
-                                x + size, y + size, z + size,
-                                x, y + size, z + size
-                            );
-                            
-                            indices.push(
-                                v, v+1, v+2, v, v+2, v+3,
-                                v+4, v+5, v+6, v+4, v+6, v+7,
-                                v, v+1, v+5, v, v+5, v+4,
-                                v+2, v+3, v+7, v+2, v+7, v+6,
-                                v, v+3, v+7, v, v+7, v+4,
-                                v+1, v+2, v+6, v+1, v+6, v+5
-                            );
-                            
-                            vertexIndex += 8;
+                            positions.push({ x, y, z, value });
                         }
                     }
                 }
             }
             
-            console.log(`Generated ${positions.length / 3} vertices, ${indices.length / 3} triangles`);
+            console.log(`Creating ${positions.length} spheres`);
             
-            geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-            geometry.setIndex(indices);
-            geometry.computeVertexNormals();
+            const instancedMesh = new THREE.InstancedMesh(sphereGeom, material, positions.length);
+            const matrix = new THREE.Matrix4();
             
-            const material = new THREE.MeshPhongMaterial({
-                color: 0x00ff88,
-                shininess: 30,
-                transparent: true,
-                opacity: 0.7,
-                side: THREE.DoubleSide
+            positions.forEach((pos, i) => {
+                const scale = 0.5 + (pos.value - min) / (max - min);
+                matrix.makeScale(scale, scale, scale);
+                matrix.setPosition(pos.x, pos.y, pos.z);
+                instancedMesh.setMatrixAt(i, matrix);
             });
             
-            marchingCubes = new THREE.Mesh(geometry, material);
+            instancedMesh.instanceMatrix.needsUpdate = true;
+            marchingCubes = instancedMesh;
             scene.add(marchingCubes);
         }
 
