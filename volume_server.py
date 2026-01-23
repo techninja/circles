@@ -81,7 +81,7 @@ async def extract_volume(req: VolumeRequest):
         
         # Compute scalar field using Gaussian influence
         scalar_field = np.zeros((res, res, res))
-        sigma = grid_range / 4  # Gaussian width
+        sigma = grid_range / 6  # Tighter Gaussian for sharper features
         
         for i in range(res):
             for j in range(res):
@@ -95,6 +95,9 @@ async def extract_volume(req: VolumeRequest):
                         influence += np.exp(-dist_sq / (2 * sigma ** 2))
                     
                     scalar_field[i, j, k] = influence
+        
+        # Apply power transform to enhance contrast
+        scalar_field = np.power(scalar_field, 1.5)
         
         # Normalize to 0-1 range
         scalar_field = (scalar_field - scalar_field.min()) / (scalar_field.max() - scalar_field.min())

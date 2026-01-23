@@ -33,6 +33,7 @@
     <script type="module">
         import * as THREE from 'three';
         import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { MarchingCubes } from 'three/addons/objects/MarchingCubes.js';
 
         const canvas = document.getElementById('canvas');
         const status = document.getElementById('status');
@@ -49,64 +50,59 @@
         const controls = new OrbitControls(camera, canvas);
         controls.enableDamping = true;
 
-        const light = new THREE.DirectionalLight(0x00ff88, 1);
+        const light = new THREE.DirectionalLight(0xffffff, 1.2);
         light.position.set(5, 5, 5);
         scene.add(light);
-        scene.add(new THREE.AmbientLight(0x003322, 0.5));
+        scene.add(new THREE.AmbientLight(0x404040, 0.6));
+        const backLight = new THREE.DirectionalLight(0x0088ff, 0.5);
+        backLight.position.set(-5, -3, -5);
+        scene.add(backLight);
 
-        let marchingCubes = null;
-        let label = null;
         const manifolds = [];
 
         function createManifold(data, position = { x: 0, y: 0, z: 0 }) {
             const res = data.resolution;
             const field = data.field;
             
-            const min = Math.min(...field);
-            const max = Math.max(...field);
-            
-            const sphereGeom = new THREE.SphereGeometry(0.08, 8, 8);
             const material = new THREE.MeshPhongMaterial({
                 color: 0x00ff88,
-                shininess: 30,
+                shininess: 80,
+                specular: 0x00ffaa,
                 transparent: true,
-                opacity: 0.6
+                opacity: 0.85
             });
             
-            const positions = [];
-            const threshold = min + (max - min) * 0.5;
+            const mcubes = new MarchingCubes(res, material, true, true, 100000);
+            mcubes.position.set(position.x, position.y, position.z);
+            mcubes.scale.set(2, 2, 2);
+            mcubes.isolation = 50;
+            
+            mcubes.reset();
+            
+            const min = Math.min(...field);
+            const max = Math.max(...field);
+            const range = max - min;
             
             for (let i = 0; i < res; i++) {
                 for (let j = 0; j < res; j++) {
                     for (let k = 0; k < res; k++) {
                         const idx = i * res * res + j * res + k;
                         const value = field[idx];
+                        const normalized = (value - min) / range;
                         
-                        if (value > threshold) {
-                            const x = (i / res - 0.5) * 4;
-                            const y = (j / res - 0.5) * 4;
-                            const z = (k / res - 0.5) * 4;
-                            positions.push({ x, y, z, value });
+                        if (normalized > 0.3) {
+                            const x = i / (res - 1);
+                            const y = j / (res - 1);
+                            const z = k / (res - 1);
+                            const strength = normalized * 100;
+                            mcubes.addBall(x, y, z, strength, 10);
                         }
                     }
                 }
             }
             
-            const instancedMesh = new THREE.InstancedMesh(sphereGeom, material, positions.length);
-            const matrix = new THREE.Matrix4();
+            scene.add(mcubes);
             
-            positions.forEach((pos, i) => {
-                const scale = 0.5 + (pos.value - min) / (max - min);
-                matrix.makeScale(scale, scale, scale);
-                matrix.setPosition(pos.x, pos.y, pos.z);
-                instancedMesh.setMatrixAt(i, matrix);
-            });
-            
-            instancedMesh.instanceMatrix.needsUpdate = true;
-            instancedMesh.position.set(position.x, position.y, position.z);
-            scene.add(instancedMesh);
-            
-            // Add label
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
             canvas.width = 512;
@@ -123,19 +119,15 @@
             labelSprite.position.set(position.x, position.y + 3, position.z);
             scene.add(labelSprite);
             
-            manifolds.push({ mesh: instancedMesh, label: labelSprite, seed: data.seed });
+            manifolds.push({ mesh: mcubes, label: labelSprite, seed: data.seed });
         }
 
-        function createMarchingCubes(data) {
-            // Clear old manifolds
+        function clearManifolds() {
             manifolds.forEach(m => {
                 scene.remove(m.mesh);
                 scene.remove(m.label);
             });
             manifolds.length = 0;
-            
-            // Create center manifold
-            createManifold(data, { x: 0, y: 0, z: 0 });
         }
 
         function animate() {
@@ -144,6 +136,7 @@
             
             manifolds.forEach(m => {
                 m.mesh.rotation.y += 0.002;
+                m.mesh.update();
             });
             
             renderer.render(scene, camera);
@@ -182,7 +175,8 @@
                 console.log('Received volume:', volData);
                 
                 if (volData.status === 'success') {
-                    createMarchingCubes(volData.data);
+                    clearManifolds();
+                    createManifold(volData.data, { x: 0, y: 0, z: 0 });
                     status.textContent = `✅ ${seed} | Finding neighbors...`;
                     
                     // Get neighbors
