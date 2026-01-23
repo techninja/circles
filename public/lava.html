@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Circles: Manifold Interaction</title>
+    <style>body { margin: 0; background: #000; overflow: hidden; }</style>
+</head>
+<body>
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "/deps/three.js",
+            "three/addons/": "/deps/three/examples/jsm/"
+        }
+    }
+    </script>
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { MarchingCubes } from 'three/addons/objects/MarchingCubes.js';
+
+        // 1. Setup Scene
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(50, window.innerWidth/window.innerHeight, 0.1, 100);
+        camera.position.set(0, 0, 20);
+        
+        const renderer = new THREE.WebGLRenderer();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+        
+        const controls = new OrbitControls(camera, renderer.domElement);
+
+        // 2. The "Membrane" (Marching Cubes)
+        // This is the single mesh that will hold ALL concepts
+        const resolution = 64; 
+        const material = new THREE.MeshPhysicalMaterial({ 
+            color: 0x00ff88, 
+            transmission: 0.9,  // Glass-like
+            opacity: 1,
+            metalness: 0,
+            roughness: 0,
+            ior: 1.5,
+            thickness: 2,
+            clearcoat: 1,
+            side: THREE.DoubleSide
+        });
+        
+        const membrane = new MarchingCubes(resolution, material, true, true, 100000);
+        membrane.position.set(0, 0, 0);
+        membrane.scale.set(10, 10, 10); // Scale up to fill view
+        scene.add(membrane);
+
+        // 3. Concepts (The Physics Nodes)
+        const concepts = [
+            { label: "House", x: -2, y: 0, z: 0, radius: 1.5, strength: 1.5 }, // Base nodes
+            { label: "Home", x: 2, y: 0, z: 0, radius: 1.2, strength: 1.0 }
+        ];
+
+        // Simple spring physics loop
+        function updatePhysics() {
+            // Pull concepts together (Attraction)
+            const k = 0.05; // Spring constant
+            const restLength = 1.0; 
+
+            // Example: Pull 'Home' towards 'House'
+            const dx = concepts[1].x - concepts[0].x;
+            const dy = concepts[1].y - concepts[0].y;
+            const dist = Math.sqrt(dx*dx + dy*dy);
+            
+            if (dist > restLength) {
+                const force = (dist - restLength) * k;
+                const fx = (dx / dist) * force;
+                const fy = (dy / dist) * force;
+                
+                concepts[0].x += fx;
+                concepts[0].y += fy;
+                concepts[1].x -= fx;
+                concepts[1].y -= fy;
+            }
+        }
+
+        // 4. Render Loop
+        function animate() {
+            requestAnimationFrame(animate);
+            updatePhysics();
+
+            // Reset the scalar field
+            membrane.reset();
+
+            // Add each concept as a "blob" to the field
+            concepts.forEach(c => {
+                // Map world coordinates to 0..1 marching cubes grid space
+                const gx = (c.x / 10) + 0.5;
+                constqy = (c.y / 10) + 0.5;
+                const gz = (c.z / 10) + 0.5;
+                
+                // addBall(x, y, z, strength, subtract_offset, color)
+                membrane.addBall(gx, qy, gz, c.strength, 12);
+            });
+
+            // Update the mesh geometry
+            membrane.update();
+            renderer.render(scene, camera);
+        }
+        animate();
+    </script>
+</body>
+</html>

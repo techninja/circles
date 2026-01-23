@@ -135,6 +135,29 @@ async def get_neighbors(req: NeighborsRequest):
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.post("/metaball")
+async def get_metaball(req: VolumeRequest):
+    """Returns physics properties instead of a voxel grid"""
+    # ... (Keep embedding generation logic) ...
+    
+    # Calculate "Mass" and "Radius" based on semantic spread
+    # High variance in embeddings = Larger, fluffier concept
+    # Low variance = Tight, dense concept
+    centroid = embeddings.mean(axis=0)
+    distances = np.linalg.norm(embeddings - centroid, axis=1)
+    radius = float(np.mean(distances)) * 5.0  # Scale factor for visual
+    density = 1.0 / (float(np.std(distances)) + 0.1)
+
+    return {
+        "status": "success",
+        "data": {
+            "seed": req.seed,
+            "mass": density,
+            "radius": radius,
+            # We don't send X/Y/Z yet, the frontend physics engine determines that
+        }
+    }
+
 @app.get("/health")
 async def health():
     try:
