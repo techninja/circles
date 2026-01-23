@@ -69,24 +69,24 @@ async def extract_volume(req: VolumeRequest):
         y = np.linspace(points_3d[:, 1].min() - margin, points_3d[:, 1].max() + margin, res)
         z = np.linspace(points_3d[:, 2].min() - margin, points_3d[:, 2].max() + margin, res)
         
-        # Compute scalar field using metaball influence
+        # Compute scalar field using Gaussian influence
         scalar_field = np.zeros((res, res, res))
+        sigma = grid_range / 4  # Gaussian width
         
         for i in range(res):
             for j in range(res):
                 for k in range(res):
                     point = np.array([x[i], y[j], z[k]])
                     
-                    # Sum of inverse distance squared (metaball formula)
+                    # Sum of Gaussian influences
                     influence = 0
                     for p3d in points_3d:
-                        dist = np.linalg.norm(point - p3d)
-                        if dist > 0:
-                            influence += 1.0 / (dist ** 2 + 0.1)
+                        dist_sq = np.sum((point - p3d) ** 2)
+                        influence += np.exp(-dist_sq / (2 * sigma ** 2))
                     
                     scalar_field[i, j, k] = influence
         
-        # Normalize
+        # Normalize to 0-1 range
         scalar_field = (scalar_field - scalar_field.min()) / (scalar_field.max() - scalar_field.min())
         
         print(f"Scalar field range: {scalar_field.min()} to {scalar_field.max()}")
